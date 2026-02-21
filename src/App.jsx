@@ -5,13 +5,6 @@ import { Input } from "@/components/ui/input";
 import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 
-/*
-  VERSÃO INTEGRADA COM SUPABASE
-  - Dados salvos no banco de dados
-  - Estrutura escalável
-  - Controle simples de login
-*/
-
 export default function OrganizacaoCarrosApp() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [login, setLogin] = useState({ user: "", password: "" });
@@ -56,33 +49,35 @@ export default function OrganizacaoCarrosApp() {
 
       // Carregar projetos
       const { data: projectsData, error: projectsError } = await supabase
-        .from("projetos")
+        .from("projects")
         .select("*");
 
       if (projectsError) throw projectsError;
       setProjects(projectsData || []);
+      console.log("✅ Projetos carregados:", projectsData);
 
       // Carregar carros
       const { data: carsData, error: carsError } = await supabase
-        .from("carros")
+        .from("cars")
         .select("*");
 
       if (carsError) throw carsError;
       setCars(carsData || []);
+      console.log("✅ Carros carregados:", carsData);
 
       // Carregar recursos
       const { data: resourcesData, error: resourcesError } = await supabase
-        .from("recursos_disponiveis")
-        .select("nome");
+        .from("resources")
+        .select("name");
 
       if (resourcesError) throw resourcesError;
-      setAvailableResources(resourcesData?.map((r) => r.nome) || []);
+      setAvailableResources(resourcesData?.map((r) => r.name) || []);
+      console.log("✅ Recursos carregados:", resourcesData);
 
       setIsAuthenticated(true);
       console.log("✅ Dados carregados com sucesso!");
     } catch (error) {
       console.error("❌ Erro ao carregar dados:", error.message);
-      // Fallback para dados locais
       loadLocalData();
       setIsAuthenticated(true);
     } finally {
@@ -111,10 +106,6 @@ export default function OrganizacaoCarrosApp() {
     }
   };
 
-  /* ==========================
-     AUTENTICAÇÃO SIMPLES
-  ========================== */
-
   const handleLogin = () => {
     if (login.user === "admin" && login.password === "admin") {
       setIsAuthenticated(true);
@@ -123,29 +114,25 @@ export default function OrganizacaoCarrosApp() {
     }
   };
 
-  /* ==========================
-     CRUD PROJETOS
-  ========================== */
-
   const addProject = async () => {
     if (!newProject) return;
 
     try {
       if (supabase) {
         const { data, error } = await supabase
-          .from("projetos")
-          .insert([{ nome: newProject }])
+          .from("projects")
+          .insert([{ name: newProject }])
           .select();
 
         if (error) throw error;
         setProjects([...projects, data[0]]);
+        console.log("✅ Projeto adicionado!");
       } else {
         const newProj = { id: Date.now().toString(), name: newProject };
         setProjects([...projects, newProj]);
       }
 
       setNewProject("");
-      console.log("✅ Projeto adicionado!");
     } catch (error) {
       console.error("❌ Erro ao adicionar projeto:", error.message);
     }
@@ -155,7 +142,7 @@ export default function OrganizacaoCarrosApp() {
     try {
       if (supabase) {
         const { error } = await supabase
-          .from("projetos")
+          .from("projects")
           .delete()
           .eq("id", projectId);
 
@@ -165,7 +152,7 @@ export default function OrganizacaoCarrosApp() {
       setProjects(projects.filter((p) => p.id !== projectId));
       setCars(
         cars.map((car) =>
-          car.projeto_id === projectId ? { ...car, projeto_id: null } : car
+          car.project_id === projectId ? { ...car, project_id: null } : car
         )
       );
       console.log("✅ Projeto deletado!");
@@ -178,8 +165,8 @@ export default function OrganizacaoCarrosApp() {
     try {
       if (supabase) {
         const { error } = await supabase
-          .from("projetos")
-          .update({ nome: editedProjectName })
+          .from("projects")
+          .update({ name: editedProjectName })
           .eq("id", editingProjectId);
 
         if (error) throw error;
@@ -197,38 +184,34 @@ export default function OrganizacaoCarrosApp() {
     }
   };
 
-  /* ==========================
-     CRUD CARROS
-  ========================== */
-
   const addCar = async () => {
     if (!form.plate || !form.model) return;
 
     try {
       if (supabase) {
         const { data, error } = await supabase
-          .from("carros")
+          .from("cars")
           .insert([
             {
-              placa: form.plate,
-              modelo: form.model,
-              recursos: form.resources,
-              projeto_id: null,
+              plate: form.plate,
+              model: form.model,
+              resources: form.resources,
+              project_id: null,
             },
           ])
           .select();
 
         if (error) throw error;
         setCars([...cars, data[0]]);
+        console.log("✅ Carro adicionado!");
       } else {
         setCars([
           ...cars,
-          { id: Date.now().toString(), ...form, projectId: null },
+          { id: Date.now().toString(), ...form, project_id: null },
         ]);
       }
 
       setForm({ plate: "", model: "", resources: [] });
-      console.log("✅ Carro adicionado!");
     } catch (error) {
       console.error("❌ Erro ao adicionar carro:", error.message);
     }
@@ -237,7 +220,7 @@ export default function OrganizacaoCarrosApp() {
   const deleteCar = async (id) => {
     try {
       if (supabase) {
-        const { error } = await supabase.from("carros").delete().eq("id", id);
+        const { error } = await supabase.from("cars").delete().eq("id", id);
 
         if (error) throw error;
       }
@@ -274,26 +257,22 @@ export default function OrganizacaoCarrosApp() {
 
       if (supabase) {
         const { data, error } = await supabase
-          .from("recursos_disponiveis")
-          .insert([{ nome: newResource }])
+          .from("resources")
+          .insert([{ name: newResource }])
           .select();
 
         if (error) throw error;
         setAvailableResources([...availableResources, newResource]);
+        console.log("✅ Recurso adicionado!");
       } else {
         setAvailableResources([...availableResources, newResource]);
       }
 
       setNewResource("");
-      console.log("✅ Recurso adicionado!");
     } catch (error) {
       console.error("❌ Erro ao adicionar recurso:", error.message);
     }
   };
-
-  /* ==========================
-     DRAG AND DROP
-  ========================== */
 
   const onDrop = async (projectId) => {
     if (!draggedCar) return;
@@ -301,8 +280,8 @@ export default function OrganizacaoCarrosApp() {
     try {
       if (supabase) {
         const { error } = await supabase
-          .from("carros")
-          .update({ projeto_id: projectId })
+          .from("cars")
+          .update({ project_id: projectId })
           .eq("id", draggedCar);
 
         if (error) throw error;
@@ -311,7 +290,7 @@ export default function OrganizacaoCarrosApp() {
       setCars(
         cars.map((car) =>
           car.id === draggedCar
-            ? { ...car, projeto_id: projectId }
+            ? { ...car, project_id: projectId }
             : car
         )
       );
@@ -334,8 +313,8 @@ export default function OrganizacaoCarrosApp() {
         <CardContent className="p-4 text-sm space-y-2">
           <div className="flex justify-between">
             <div>
-              <p className="font-semibold">🚗 {car.modelo}</p>
-              <p>Placa: {car.placa}</p>
+              <p className="font-semibold">🚗 {car.model}</p>
+              <p>Placa: {car.plate}</p>
             </div>
             <Button
               size="sm"
@@ -347,8 +326,8 @@ export default function OrganizacaoCarrosApp() {
           </div>
 
           <div className="text-xs text-gray-500 space-y-1">
-            {car.recursos && car.recursos.length > 0 ? (
-              car.recursos.map((r, i) => <p key={i}>✔ {r}</p>)
+            {car.resources && car.resources.length > 0 ? (
+              car.resources.map((r, i) => <p key={i}>✔ {r}</p>)
             ) : (
               <p>Sem recursos adicionais</p>
             )}
@@ -357,10 +336,6 @@ export default function OrganizacaoCarrosApp() {
       </Card>
     </motion.div>
   );
-
-  /* ==========================
-     TELA DE LOADING
-  ========================== */
 
   if (loading) {
     return (
@@ -372,10 +347,6 @@ export default function OrganizacaoCarrosApp() {
       </div>
     );
   }
-
-  /* ==========================
-     TELA DE LOGIN
-  ========================== */
 
   if (!isAuthenticated) {
     return (
@@ -405,10 +376,6 @@ export default function OrganizacaoCarrosApp() {
       </div>
     );
   }
-
-  /* ==========================
-     SISTEMA PRINCIPAL
-  ========================== */
 
   return (
     <div className="p-6 grid grid-cols-1 lg:grid-cols-4 gap-6 bg-gray-50 min-h-screen">
@@ -476,7 +443,7 @@ export default function OrganizacaoCarrosApp() {
             <h2 className="text-lg font-bold mb-3">Carros Não Alocados</h2>
             <div className="space-y-3">
               {cars
-                .filter((c) => !c.projeto_id)
+                .filter((c) => !c.project_id)
                 .map((car) => renderCar(car))}
             </div>
           </CardContent>
@@ -504,10 +471,10 @@ export default function OrganizacaoCarrosApp() {
                       className="text-lg font-bold cursor-pointer hover:text-blue-600"
                       onClick={() => {
                         setEditingProjectId(project.id);
-                        setEditedProjectName(project.name || project.nome);
+                        setEditedProjectName(project.name);
                       }}
                     >
-                      {project.name || project.nome}
+                      {project.name}
                     </h2>
                   )}
                   <Button
@@ -521,7 +488,7 @@ export default function OrganizacaoCarrosApp() {
 
                 <div className="space-y-3">
                   {cars
-                    .filter((c) => c.projeto_id === project.id)
+                    .filter((c) => c.project_id === project.id)
                     .map((car) => renderCar(car))}
                 </div>
               </CardContent>
