@@ -3,20 +3,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { motion } from "framer-motion";
+import { supabase } from "@/lib/supabaseClient";
 
 /*
-  VERSÃO PREPARADA PARA PRODUÇÃO
-  - Persistência em LocalStorage (simula backend)
-  - Estrutura preparada para futura API
+  VERSÃO INTEGRADA COM SUPABASE
+  - Dados salvos no banco de dados
+  - Estrutura escalável
   - Controle simples de login
-  - Organização de código mais escalável
 */
-
-const STORAGE_KEY = "empresa_carros_data_v1";
 
 export default function OrganizacaoCarrosApp() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [login, setLogin] = useState({ user: "", password: "" });
+  const [loading, setLoading] = useState(true);
 
   const [cars, setCars] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -36,10 +35,63 @@ export default function OrganizacaoCarrosApp() {
   const [draggedCar, setDraggedCar] = useState(null);
 
   /* ==========================
-     PERSISTÊNCIA (SIMULA BACKEND)
+     CARREGAR DADOS AO INICIAR
   ========================== */
 
   useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  const loadInitialData = async () => {
+    try {
+      if (!supabase) {
+        console.warn("Supabase não configurado, usando dados locais");
+        setIsAuthenticated(true);
+        loadLocalData();
+        setLoading(false);
+        return;
+      }
+
+      console.log("📥 Carregando dados do Supabase...");
+
+      // Carregar projetos
+      const { data: projectsData, error: projectsError } = await supabase
+        .from("projetos")
+        .select("*");
+
+      if (projectsError) throw projectsError;
+      setProjects(projectsData || []);
+
+      // Carregar carros
+      const { data: carsData, error: carsError } = await supabase
+        .from("carros")
+        .select("*");
+
+      if (carsError) throw carsError;
+      setCars(carsData || []);
+
+      // Carregar recursos
+      const { data: resourcesData, error: resourcesError } = await supabase
+        .from("recursos_disponiveis")
+        .select("nome");
+
+      if (resourcesError) throw resourcesError;
+      setAvailableResources(resourcesData?.map((r) => r.nome) || []);
+
+      setIsAuthenticated(true);
+      console.log("✅ Dados carregados com sucesso!");
+    } catch (error) {
+      console.error("❌ Erro ao carregar dados:", error.message);
+      // Fallback para dados locais
+      loadLocalData();
+      setIsAuthenticated(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadLocalData = () => {
+    const STORAGE_KEY = "empresa_carros_data_v1";
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const data = JSON.parse(saved);
@@ -47,7 +99,6 @@ export default function OrganizacaoCarrosApp() {
       setProjects(data.projects || []);
       setAvailableResources(data.availableResources || []);
     } else {
-      // Dados iniciais padrão
       setProjects([
         { id: "p1", name: "Projeto A" },
         { id: "p2", name: "Projeto B" },
@@ -58,18 +109,10 @@ export default function OrganizacaoCarrosApp() {
         "Tração 4x4",
       ]);
     }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ cars, projects, availableResources })
-    );
-  }, [cars, projects, availableResources]);
+  };
 
   /* ==========================
      AUTENTICAÇÃO SIMPLES
-     (substituir por backend real depois)
   ========================== */
 
   const handleLogin = () => {
@@ -84,45 +127,126 @@ export default function OrganizacaoCarrosApp() {
      CRUD PROJETOS
   ========================== */
 
-  const addProject = () => {
+  const addProject = async () => {
     if (!newProject) return;
-    setProjects([...projects, { id: Date.now().toString(), name: newProject }]);
-    setNewProject("");
+
+    try {
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("projetos")
+          .insert([{ nome: newProject }])
+          .select();
+
+        if (error) throw error;
+        setProjects([...projects, data[0]]);
+      } else {
+        const newProj = { id: Date.now().toString(), name: newProject };
+        setProjects([...projects, newProj]);
+      }
+
+      setNewProject("");
+      console.log("✅ Projeto adicionado!");
+    } catch (error) {
+      console.error("❌ Erro ao adicionar projeto:", error.message);
+    }
   };
 
-  const deleteProject = (projectId) => {
-    setProjects(projects.filter((p) => p.id !== projectId));
-    setCars(
-      cars.map((car) =>
-        car.projectId === projectId ? { ...car, projectId: null } : car
-      )
-    );
+  const deleteProject = async (projectId) => {
+    try {
+      if (supabase) {
+        const { error } = await supabase
+          .from("projetos")
+          .delete()
+          .eq("id", projectId);
+
+        if (error) throw error;
+      }
+
+      setProjects(projects.filter((p) => p.id !== projectId));
+      setCars(
+        cars.map((car) =>
+          car.projeto_id === projectId ? { ...car, projeto_id: null } : car
+        )
+      );
+      console.log("✅ Projeto deletado!");
+    } catch (error) {
+      console.error("❌ Erro ao deletar projeto:", error.message);
+    }
   };
 
-  const saveProjectEdit = () => {
-    setProjects(
-      projects.map((p) =>
-        p.id === editingProjectId ? { ...p, name: editedProjectName } : p
-      )
-    );
-    setEditingProjectId(null);
+  const saveProjectEdit = async () => {
+    try {
+      if (supabase) {
+        const { error } = await supabase
+          .from("projetos")
+          .update({ nome: editedProjectName })
+          .eq("id", editingProjectId);
+
+        if (error) throw error;
+      }
+
+      setProjects(
+        projects.map((p) =>
+          p.id === editingProjectId ? { ...p, name: editedProjectName } : p
+        )
+      );
+      setEditingProjectId(null);
+      console.log("✅ Projeto atualizado!");
+    } catch (error) {
+      console.error("❌ Erro ao atualizar projeto:", error.message);
+    }
   };
 
   /* ==========================
      CRUD CARROS
   ========================== */
 
-  const addCar = () => {
+  const addCar = async () => {
     if (!form.plate || !form.model) return;
-    setCars([
-      ...cars,
-      { id: Date.now().toString(), ...form, projectId: null },
-    ]);
-    setForm({ plate: "", model: "", resources: [] });
+
+    try {
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("carros")
+          .insert([
+            {
+              placa: form.plate,
+              modelo: form.model,
+              recursos: form.resources,
+              projeto_id: null,
+            },
+          ])
+          .select();
+
+        if (error) throw error;
+        setCars([...cars, data[0]]);
+      } else {
+        setCars([
+          ...cars,
+          { id: Date.now().toString(), ...form, projectId: null },
+        ]);
+      }
+
+      setForm({ plate: "", model: "", resources: [] });
+      console.log("✅ Carro adicionado!");
+    } catch (error) {
+      console.error("❌ Erro ao adicionar carro:", error.message);
+    }
   };
 
-  const deleteCar = (id) => {
-    setCars(cars.filter((c) => c.id !== id));
+  const deleteCar = async (id) => {
+    try {
+      if (supabase) {
+        const { error } = await supabase.from("carros").delete().eq("id", id);
+
+        if (error) throw error;
+      }
+
+      setCars(cars.filter((c) => c.id !== id));
+      console.log("✅ Carro deletado!");
+    } catch (error) {
+      console.error("❌ Erro ao deletar carro:", error.message);
+    }
   };
 
   const toggleResource = (resource) => {
@@ -139,26 +263,63 @@ export default function OrganizacaoCarrosApp() {
     }
   };
 
-  const addResourceOption = () => {
+  const addResourceOption = async () => {
     if (!newResource) return;
-    if (!availableResources.includes(newResource)) {
-      setAvailableResources([...availableResources, newResource]);
+
+    try {
+      if (availableResources.includes(newResource)) {
+        alert("Recurso já existe!");
+        return;
+      }
+
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("recursos_disponiveis")
+          .insert([{ nome: newResource }])
+          .select();
+
+        if (error) throw error;
+        setAvailableResources([...availableResources, newResource]);
+      } else {
+        setAvailableResources([...availableResources, newResource]);
+      }
+
+      setNewResource("");
+      console.log("✅ Recurso adicionado!");
+    } catch (error) {
+      console.error("❌ Erro ao adicionar recurso:", error.message);
     }
-    setNewResource("");
   };
 
   /* ==========================
      DRAG AND DROP
   ========================== */
 
-  const onDrop = (projectId) => {
+  const onDrop = async (projectId) => {
     if (!draggedCar) return;
-    setCars(
-      cars.map((car) =>
-        car.id === draggedCar ? { ...car, projectId } : car
-      )
-    );
-    setDraggedCar(null);
+
+    try {
+      if (supabase) {
+        const { error } = await supabase
+          .from("carros")
+          .update({ projeto_id: projectId })
+          .eq("id", draggedCar);
+
+        if (error) throw error;
+      }
+
+      setCars(
+        cars.map((car) =>
+          car.id === draggedCar
+            ? { ...car, projeto_id: projectId }
+            : car
+        )
+      );
+      setDraggedCar(null);
+      console.log("✅ Carro movido!");
+    } catch (error) {
+      console.error("❌ Erro ao mover carro:", error.message);
+    }
   };
 
   const renderCar = (car) => (
@@ -173,8 +334,8 @@ export default function OrganizacaoCarrosApp() {
         <CardContent className="p-4 text-sm space-y-2">
           <div className="flex justify-between">
             <div>
-              <p className="font-semibold">🚗 {car.model}</p>
-              <p>Placa: {car.plate}</p>
+              <p className="font-semibold">🚗 {car.modelo}</p>
+              <p>Placa: {car.placa}</p>
             </div>
             <Button
               size="sm"
@@ -186,8 +347,8 @@ export default function OrganizacaoCarrosApp() {
           </div>
 
           <div className="text-xs text-gray-500 space-y-1">
-            {car.resources.length > 0 ? (
-              car.resources.map((r, i) => <p key={i}>✔ {r}</p>)
+            {car.recursos && car.recursos.length > 0 ? (
+              car.recursos.map((r, i) => <p key={i}>✔ {r}</p>)
             ) : (
               <p>Sem recursos adicionais</p>
             )}
@@ -196,6 +357,21 @@ export default function OrganizacaoCarrosApp() {
       </Card>
     </motion.div>
   );
+
+  /* ==========================
+     TELA DE LOADING
+  ========================== */
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center space-y-4">
+          <div className="animate-spin text-4xl">⏳</div>
+          <p className="text-gray-600">Carregando dados...</p>
+        </div>
+      </div>
+    );
+  }
 
   /* ==========================
      TELA DE LOGIN
@@ -235,7 +411,7 @@ export default function OrganizacaoCarrosApp() {
   ========================== */
 
   return (
-    <div className="p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
+    <div className="p-6 grid grid-cols-1 lg:grid-cols-4 gap-6 bg-gray-50 min-h-screen">
       <div className="space-y-4">
         <Card className="rounded-2xl shadow-lg">
           <CardContent className="p-4 space-y-3">
@@ -300,7 +476,7 @@ export default function OrganizacaoCarrosApp() {
             <h2 className="text-lg font-bold mb-3">Carros Não Alocados</h2>
             <div className="space-y-3">
               {cars
-                .filter((c) => !c.projectId)
+                .filter((c) => !c.projeto_id)
                 .map((car) => renderCar(car))}
             </div>
           </CardContent>
@@ -325,13 +501,13 @@ export default function OrganizacaoCarrosApp() {
                     />
                   ) : (
                     <h2
-                      className="text-lg font-bold cursor-pointer"
+                      className="text-lg font-bold cursor-pointer hover:text-blue-600"
                       onClick={() => {
                         setEditingProjectId(project.id);
-                        setEditedProjectName(project.name);
+                        setEditedProjectName(project.name || project.nome);
                       }}
                     >
-                      {project.name}
+                      {project.name || project.nome}
                     </h2>
                   )}
                   <Button
@@ -345,7 +521,7 @@ export default function OrganizacaoCarrosApp() {
 
                 <div className="space-y-3">
                   {cars
-                    .filter((c) => c.projectId === project.id)
+                    .filter((c) => c.projeto_id === project.id)
                     .map((car) => renderCar(car))}
                 </div>
               </CardContent>
