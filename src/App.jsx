@@ -9,7 +9,7 @@ export default function OrganizacaoCarrosApp() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [login, setLogin] = useState({ user: "", password: "" });
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // ← ALTERADO PARA FALSE
 
   const [cars, setCars] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -503,7 +503,7 @@ export default function OrganizacaoCarrosApp() {
 
         {/* CONTEÚDO PRINCIPAL (Projetos) */}
         <div className="flex-1 p-8 overflow-auto">
-          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-6"> {/* ← ALTERADO PARA 4 COLUNAS */}
             {projects.map((project) => (
               <div
                 key={project.id}
